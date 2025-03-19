@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">LibraryOfBabelV</string>
+    <string name="wall">Стена</string>
+    <string name="shelf">Полка</string>
+    <string name="volume">Книга</string>
+    <string name="page">Страница</string>
+    <string name="text">Текст</string>
+    <string name="search">Найти</string>
+    <string name="countCharsInLines">Количество символов в строке</string>
+    <string name="title">Название книги</string>
+</resources>
