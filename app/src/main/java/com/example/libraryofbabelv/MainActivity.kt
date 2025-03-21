@@ -36,7 +36,7 @@ class MainActivity : AppCompatActivity() {
         when {
             LibraryOfBabel.isCoordinates(input) -> {
                 val coord = input.split(" ")
-                val result = LibraryOfBabel.getPageByCoordinates(
+                val result = LibraryOfBabel.searchByCoordinates(
                     PageCoordinates(
                     wall = coord[0].toInt(),
                     shelf = coord[1].toInt(),
@@ -53,9 +53,9 @@ class MainActivity : AppCompatActivity() {
                 textTV.setText(result?.content)
             }
             else -> {
-                val result = LibraryOfBabel.search(input, config)
-                titleVT.setText(result.title)
-                textTV.setText(result.content)
+                val result = LibraryOfBabel.searchByText(input, config)
+                titleVT.setText(result?.title)
+                textTV.setText(result?.content)
             }
         }
     }
