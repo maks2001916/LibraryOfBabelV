@@ -1,11 +1,12 @@
 package com.example.libraryofbabelv
 
 import java.util.regex.Pattern
+import java.util.zip.CRC32
 import kotlin.math.sin
 
 class LibraryOfBabel {
 
-    class Configuration (
+    class Configuration(
         var alphabet: String = "абвгдеёжзийклмнопрстуфхцчшщъыьэюя, .",
         var digs: String = "0123456789abcdefghijklmnopqrstuvwxyz",
         var lengthOfPage: Int = 4819,
@@ -16,116 +17,153 @@ class LibraryOfBabel {
         var page: Int = 421
     ) {
         fun copy() = Configuration(
-            alphabet,
-            digs,
-            lengthOfPage,
-            lengthOfTitle,
-            wall,
-            shelf,
-            volume,
-            page
+            alphabet, digs, lengthOfPage, lengthOfTitle,
+            wall, shelf, volume, page
         )
     }
 
     companion object {
+        private var seed: Long = 0L
+
         // Основная функция генерации страницы
-        fun generatePage(config: Configuration): SearchResult {
-            val (titleSeed, contentSeed) = createSeeds(config)
-            val coords = PageCoordinates(
-                config.wall,
-                config.shelf,
-                config.volume,
-                config.page
-            )
+        fun generatePage(coords: PageCoordinates, config: Configuration): SearchResult {
             return SearchResult(
                 coordinates = coords,
-                title = generateTitle(titleSeed, config),
-                content = generateContent(contentSeed, config))
+                title = generateTitle(coords, config),
+                content = generateContent(coords, config)
+            )
         }
 
-        fun getPageByKey(
-            wall: Int,
-            shelf: Int,
-            volume: Int,
-            page: Int,
-            config: Configuration
-        ): SearchResult {
-            val newConfig = config.copy().apply {
-                this.wall = wall
-                this.shelf = shelf
-                this.volume = volume
-                this.page = page
-            }
-            return generatePage(newConfig)
+        // Поиск по координатам
+        fun getPageByCoordinates(coords: PageCoordinates, config: Configuration): SearchResult {
+            return generatePage(coords, config)
         }
 
-        // Поиск по хешу
-        fun findTextByHash(
-            searchText: String,
-            config: Configuration,
-            maxAttempt: Int = 1000
-        ): SearchResult? {
-            val tempConfig = config.copy()
-            val targetHash = searchText.hashCode()
+        // Поиск по hex-ключу
+        fun getPageByHexAddress(hexAddress: String, config: Configuration): SearchResult {
+            val parts = hexAddress.split("-")
+            val coords = PageCoordinates(
+                parts[1].toInt(),
+                parts[2].toInt(),
+                parts[3].toInt(),
+                parts[4].toInt()
+            )
+            return generatePage(coords, config)
+        }
 
-            repeat(maxAttempt) { attempt ->
-                tempConfig.page = config.page + attempt
-                val result = generatePage(tempConfig)
+        // Поиск по тексту (оригинальная логика)
+        fun search(searchText: String, config: Configuration): SearchResult {
+            val wall = (Math.random() * config.wall).toInt() + 1
+            val shelf = (Math.random() * config.shelf).toInt() + 1
+            val volume = (Math.random() * config.volume).toInt() + 1
+            val page = (Math.random() * config.page).toInt() + 1
 
-                if (result.content.hashCode() == targetHash &&
-                    result.content.contains(searchText)) {
-                    return result
-                }
+            val coords = PageCoordinates(wall, shelf, volume, page)
+            val locHash = getHash("$wall$shelf$volume$page")
+
+            seed = locHash
+            val depth = (Math.random() * (config.lengthOfPage - searchText.length)).toInt()
+
+            var processedText = searchText
+            repeat(depth) {
+                processedText = config.alphabet[rnd(0, config.alphabet.length)] + processedText
             }
-            return null
+
+            var hex = ""
+            for (c in processedText) {
+                val index = config.alphabet.indexOf(c).takeIf { it != -1 } ?: continue
+                val rand = rnd(0, config.alphabet.length)
+                val newIndex = mod(index + rand, config.digs.length)
+                hex += config.digs[newIndex]
+            }
+
+            return generatePage(coords, config).copy(
+                content = hex + generateRemainingContent(hex.length, config)
+            )
         }
 
         // Поиск по регулярному выражению
-        fun searchByRegex(
-            regex: String,
-            config: Configuration,
-            maxAttempt: Int = 1000
-        ): SearchResult? {
-            val tempConfig = config.copy()
+        fun searchByRegex(regex: String, config: Configuration, maxAttempts: Int = 1000): SearchResult? {
             val pattern = Pattern.compile(regex)
-
-            repeat(maxAttempt) { attempt ->
-                tempConfig.page = config.page + attempt
-                val result = generatePage(tempConfig)
-                val matcher = pattern.matcher(result.content)
-                if (matcher.find()) return result
+            repeat(maxAttempts) {
+                val coords = generateRandomCoordinates(config)
+                val page = generatePage(coords, config)
+                if (pattern.matcher(page.content).find()) {
+                    return page
+                }
             }
             return null
         }
 
-        // Создание уникального сида
-        private fun createSeeds(config: Configuration): Pair<String, String> {
-            val baseSeed = "${config.wall}-${config.shelf}-${config.volume}-${config.page}"
-            return Pair(
-                "title:$baseSeed",
-                "content:$baseSeed"
+        private fun generateRandomCoordinates(config: Configuration): PageCoordinates {
+            return PageCoordinates(
+                wall = (Math.random() * config.wall).toInt() + 1,
+                shelf = (Math.random() * config.shelf).toInt() + 1,
+                volume = (Math.random() * config.volume).toInt() + 1,
+                page = (Math.random() * config.page).toInt() + 1
             )
         }
 
-        private fun generateTitle(seed: String, config: Configuration): String {
-            val rng = createRNG(seed)
+        private fun generateTitle(coords: PageCoordinates, config: Configuration): String {
+            val locHash = getHash("${coords.wall}${coords.shelf}${pad(coords.volume, 2)}")
+            seed = locHash
             return buildString {
                 repeat(config.lengthOfTitle) {
-                    append(getRandomChar(rng(), config.alphabet))
+                    append(config.alphabet[rnd(0, config.alphabet.length)])
                 }
             }
         }
 
-        private fun generateContent(seed: String, config: Configuration): String {
-            val rng = createRNG(seed)
+        private fun generateContent(coords: PageCoordinates, config: Configuration): String {
+            val locHash = getHash("${coords.wall}${coords.shelf}${pad(coords.volume, 2)}${pad(coords.page, 3)}")
+            seed = locHash
             return buildString {
                 repeat(config.lengthOfPage) {
-                    append(getRandomChar(rng(), config.alphabet + config.digs))
+                    append(config.digs[rnd(0, config.digs.length)])
                 }
             }.chunked(80).joinToString("\n")
         }
 
-        // Детерминированный RNG
+        private fun generateRemainingContent(length: Int, config: Configuration): String {
+            return buildString {
+                repeat(config.lengthOfPage - length) {
+                    append(config.digs[rnd(0, config.digs.length)])
+                }
+            }
+        }
+        fun toHexAddress(config: Configuration, result: SearchResult ): String {
+            val hex = generateHex(result.coordinates, config)
+            return "${hex}-${result.coordinates.wall}-${result.coordinates.shelf}-${result.coordinates.volume}-${result.coordinates.page}"
+        }
+
+        private fun generateHex(coords: PageCoordinates, config: Configuration): String {
+            val locHash = getHash("${coords.wall}${coords.shelf}${coords.volume}${coords.page}")
+            seed = locHash
+
+            return buildString {
+                repeat(40) {
+                    val rand = rnd(0, config.digs.length)
+                    append(config.digs[mod(rand, config.digs.length)])
+                }
+            }
+        }
+        private fun pad(number: Int, length: Int): String {
+            return number.toString().padStart(length, '0')
+        }
+
+        private fun getHash(input: String): Long {
+            val crc = CRC32()
+            crc.update(input.toByteArray())
+            return crc.value
+        }
+
+        private fun rnd(min: Int, max: Int): Int {
+            val rng = createRNG(seed.toString())
+            return (rng() * (max - min)).toInt() + min
+        }
+
+        private fun mod(a: Int, b: Int): Int = (a % b + b) % b
+
         private fun createRNG(seed: String): () -> Double {
             var state = seed.hashCode().toDouble()
             return {
@@ -134,12 +172,34 @@ class LibraryOfBabel {
             }
         }
 
-        // Получение случайного символа
-        private fun getRandomChar(value: Double, charset: String): Char {
-            val index = (value * charset.length).toInt()
-            return  charset[Math.abs(index) % charset.length]
+        // Проверка и парсинг координат
+        fun isCoordinates(input: String): Boolean {
+            val parts = input.split(" ")
+            if (parts.size != 4) return false
+
+            return parts.all { part ->
+                try {
+                    part.toInt()
+                    true
+                } catch (e: NumberFormatException) {
+                    false
+                }
+            }
         }
 
-    }
+        private fun parseCoordinates(input: String): PageCoordinates {
+            val parts = input.split(" ").map { it.toInt() }
+            return PageCoordinates(parts[0], parts[1], parts[2], parts[3])
+        }
 
+        // Проверка валидности регулярного выражения
+        fun isValidRegex(input: String): Boolean {
+            return try {
+                Pattern.compile(input)
+                true
+            } catch (e: Exception) {
+                false
+            }
+        }
+    }
 }

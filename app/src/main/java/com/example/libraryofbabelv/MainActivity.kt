@@ -10,12 +10,8 @@ import androidx.appcompat.app.AppCompatActivity
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var wallET: EditText
-    private lateinit var shelfET: EditText
-    private lateinit var volumeET: EditText
-    private lateinit var pageET: EditText
+    private lateinit var wsvpET: EditText
     private lateinit var searchBTN: Button
-    private lateinit var countCharsInLinesET: EditText
     private lateinit var titleVT: TextView
     private lateinit var textTV: TextView
 
@@ -25,26 +21,42 @@ class MainActivity : AppCompatActivity() {
         enableEdgeToEdge()
         setContentView(R.layout.activity_main)
 
-        wallET = findViewById(R.id.wallET)
-        shelfET = findViewById(R.id.shelfET)
-        volumeET = findViewById(R.id.volumeET)
-        pageET = findViewById(R.id.pageET)
+        wsvpET = findViewById(R.id.wsvpET)
         searchBTN = findViewById(R.id.searchBTN)
-        countCharsInLinesET = findViewById(R.id.countCharsInLinesET)
         titleVT = findViewById(R.id.titleTV)
         textTV = findViewById(R.id.textTV)
 
         searchBTN.setOnClickListener {
-            val wall = wallET.text.toString().toInt()
-            val shelf = shelfET.text.toString().toInt()
-            val volume = volumeET.text.toString().toInt()
-            val page = pageET.text.toString().toInt()
-            val config = LibraryOfBabel.Configuration()
-            val (title, content) = LibraryOfBabel.getPageByKey(wall, shelf, volume, page, config)
-            titleVT.setText(title)
-            textTV.setText(content)
-
+            processInput(wsvpET.text.toString(), LibraryOfBabel.Configuration())
         }
 
+    }
+
+    fun processInput(input: String, config: LibraryOfBabel.Configuration) {
+        when {
+            LibraryOfBabel.isCoordinates(input) -> {
+                val coord = input.split(" ")
+                val result = LibraryOfBabel.getPageByCoordinates(
+                    PageCoordinates(
+                    wall = coord[0].toInt(),
+                    shelf = coord[1].toInt(),
+                    volume = coord[2].toInt(),
+                    page = coord[3].toInt()),
+                    config = config
+                )
+                titleVT.setText(result.title)
+                textTV.setText(result.content)
+            }
+            LibraryOfBabel.isValidRegex(input) -> {
+                val result = LibraryOfBabel.searchByRegex(input, config)
+                titleVT.setText(result?.title)
+                textTV.setText(result?.content)
+            }
+            else -> {
+                val result = LibraryOfBabel.search(input, config)
+                titleVT.setText(result.title)
+                textTV.setText(result.content)
+            }
+        }
     }
 }
