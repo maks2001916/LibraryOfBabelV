@@ -35,27 +35,38 @@ class MainActivity : AppCompatActivity() {
     fun processInput(input: String, config: LibraryOfBabel.Configuration) {
         when {
             LibraryOfBabel.isCoordinates(input) -> {
-                val coord = input.split(" ")
-                val result = LibraryOfBabel.searchByCoordinates(
-                    PageCoordinates(
-                    wall = coord[0].toInt(),
-                    shelf = coord[1].toInt(),
-                    volume = coord[2].toInt(),
-                    page = coord[3].toInt()),
-                    config = config
-                )
-                titleVT.setText(result.title)
-                textTV.setText(result.content)
+                val coord = input.replace(" ", "-")
+                try {
+                    val coords = LibraryOfBabel.parseCoordinates(coord)
+                    val result = LibraryOfBabel.generatePage(coords, config)
+                    titleVT.setText(result.title)
+                    textTV.setText(result.content)
+                } catch (e: Exception) {
+                    titleVT.setText("Ошибка координат")
+                    textTV.setText("Некорректный формат координат: $coord")
+                }
             }
+
             LibraryOfBabel.isValidRegex(input) -> {
                 val result = LibraryOfBabel.searchByRegex(input, config)
-                titleVT.setText(result?.title)
-                textTV.setText(result?.content)
+                if (result != null) {
+                    titleVT.setText(result.title)
+                    textTV.setText(result.content)
+                } else {
+                    titleVT.setText("Не найдено")
+                    textTV.setText("Совпадений с регулярным выражением не найдено")
+                }
             }
+
             else -> {
-                val result = LibraryOfBabel.searchByText(input, config)
-                titleVT.setText(result?.title)
-                textTV.setText(result?.content)
+                try {
+                    val result = LibraryOfBabel.searchExactly(input, config)
+                    titleVT.setText(result.title)
+                    textTV.setText(result.content)
+                } catch (e: Exception) {
+                    titleVT.setText("Ошибка поиска")
+                    textTV.setText("Невозможно выполнить поиск для: $input")
+                }
             }
         }
     }
